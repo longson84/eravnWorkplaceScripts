@@ -1,3 +1,9 @@
+// Quét qua tất cả các file và thư mục con trong thư mục gốc
+// Liệt kê tất cả các file và thư mục con trong thư mục gốc và các thư mục con của nó
+// In ra console với định dạng:
+// - Thư mục: tên thư mục - id thư mục - ngày tạo - ngày đổi
+// - File: tên file - id file - ngày tạo - ngày đổi
+
 function main() {
   // THAY THẾ ID thư mục gốc của bạn vào đây
   // Đổi thử
