@@ -1,5 +1,6 @@
 function main() {
   // THAY THẾ ID thư mục gốc của bạn vào đây
+  // Đổi thử
   var rootFolderId = '1Om68lBVYFWNJtZsPbfyETRdUl_49rMZZ'; 
   
   try {
