@@ -5,35 +5,38 @@ function main() {
   // 1. CHỌN TÁC VỤ: 
   // 'LIST' = Liệt kê danh sách file
   // 'STATS' = Thống kê số lượng & file mới 24h
-  // 'COUNT_BY_DATE' = Đếm file có ngày tạo hoặc cập nhật >= myDate
+  // 'COUNT_BY_DATE' = Đếm file theo khoảng thời gian (FROM - TO)
   var action = 'COUNT_BY_DATE'; 
 
   // 2. ĐIỀN ID FOLDER VÀO ĐÂY
-  var folderId = '1gLxEVmX1zxHYPaeaVQb57hia-N7b0gub';
+  var folderId = '1Om68lBVYFWNJtZsPbfyETRdUl_49rMZZ';
 
-  // 3. ĐIỀN NGÀY VÀO ĐÂY (Áp dụng cho tác vụ COUNT_BY_DATE)
-  // Định dạng chuẩn: 'YYYY-MM-DD' hoặc 'YYYY-MM-DDTHH:mm:ss'
-  var myDate = new Date('2024-01-01'); 
+  // 3. CẤU HÌNH NGÀY (Chỉ áp dụng cho COUNT_BY_DATE)
+  var fromDate = new Date('2026-01-26'); 
+  var toDate = null; // Để null sẽ mặc định là thời điểm hiện tại (Hôm nay)
 
-  // --- HỆ THỐNG TỰ ĐỘNG CHẠY BÊN DƯỚI ---
-  runTask(action, folderId, myDate);
+  // --- HỆ THỐNG TỰ ĐỘNG CHẠY ---
+  runTask(action, folderId, fromDate, toDate);
 }
 
 /**
  * Hàm điều phối tác vụ
  */
-function runTask(action, folderId, targetDate) {
+function runTask(action, folderId, fromDate, toDate) {
   try {
     var folder = DriveApp.getFolderById(folderId);
     console.log("📂 Đang xử lý thư mục: " + folder.getName());
     console.log("------------------------------------------");
+
+    // Xử lý mặc định cho toDate nếu để trống
+    var endDate = (toDate && !isNaN(toDate.getTime())) ? toDate : new Date();
 
     if (action === 'LIST') {
       executeListFolder(folder);
     } else if (action === 'STATS') {
       executeCountStatistics(folder);
     } else if (action === 'COUNT_BY_DATE') {
-      executeCountByDate(folder, targetDate); 
+      executeCountByDate(folder, fromDate, endDate); 
     } else {
       console.log("❌ Lỗi: Tác vụ '" + action + "' không hợp lệ.");
     }
@@ -50,7 +53,7 @@ function runTask(action, folderId, targetDate) {
 // ==========================================
 
 /**
- * TÁC VỤ 1: Liệt kê cấu trúc (Explore)
+ * TÁC VỤ 1: Liệt kê cấu trúc (Explore) - GIỮ NGUYÊN
  */
 function executeListFolder(folder) {
   recursiveExplore(folder, 0);
@@ -74,7 +77,7 @@ function recursiveExplore(folder, level) {
 }
 
 /**
- * TÁC VỤ 2: Thống kê (Statistics)
+ * TÁC VỤ 2: Thống kê 24h (Statistics) - GIỮ NGUYÊN
  */
 function executeCountStatistics(folder) {
   var stats = {
@@ -119,38 +122,46 @@ function recursiveCount(folder, stats) {
 }
 
 /**
- * TÁC VỤ 3: Đếm file theo mốc thời gian, tính dung lượng & lấy link folder
+ * TÁC VỤ 3: Đếm file theo mốc thời gian (ĐÃ CẬP NHẬT FROM - TO)
  */
-function executeCountByDate(folder, targetDate) {
-  if (!targetDate || isNaN(targetDate.getTime())) {
-    console.log("❌ Lỗi: Ngày nhập vào (myDate) không hợp lệ. Vui lòng kiểm tra lại định dạng.");
+function executeCountByDate(folder, fromDate, toDate) {
+  if (!fromDate || isNaN(fromDate.getTime())) {
+    console.log("❌ Lỗi: Ngày bắt đầu (fromDate) không hợp lệ.");
     return;
   }
 
   var stats = {
     count: 0,
-    totalSize: 0, // Thêm biến lưu tổng dung lượng (byte)
+    totalSize: 0,
     list: []
   };
 
-  var formattedDate = Utilities.formatDate(targetDate, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
-  console.log("🔍 Tìm các file Tạo hoặc Sửa đổi từ: " + formattedDate);
+  var tz = Session.getScriptTimeZone();
+  var fmtFrom = Utilities.formatDate(fromDate, tz, "dd/MM/yyyy HH:mm");
+  var fmtTo = Utilities.formatDate(toDate, tz, "dd/MM/yyyy HH:mm");
   
-  recursiveCountByDate(folder, targetDate, stats);
+  console.log("🔍 Tìm các file trong khoảng:");
+  console.log("   Từ: " + fmtFrom);
+  console.log("   Đến: " + fmtTo);
+  
+  recursiveCountByDate(folder, fromDate, toDate, stats);
 
   console.log("📊 KẾT QUẢ TÌM KIẾM:");
   console.log("- Tổng số file đạt điều kiện: " + stats.count + " file");
-  console.log("- Tổng dung lượng: " + formatBytes(stats.totalSize)); // In tổng dung lượng
+  console.log("- Tổng dung lượng: " + formatBytes(stats.totalSize));
   
-  if (stats.list.length > 0) {
-    console.log("\n📝 DANH SÁCH CHI TIẾT:");
+  // Chỉ in danh sách nếu số lượng file hợp lý (< 100) để tránh làm lag trình duyệt
+  if (stats.list.length > 0 && stats.list.length <= 100) {
+    console.log("\n📝 DANH SÁCH CHI TIẾT (Tối đa 100 file hiển thị):");
     stats.list.forEach(function(info) {
       console.log("  + " + info);
     });
+  } else if (stats.list.length > 100) {
+    console.log("\n⚠️ Danh sách quá dài (" + stats.list.length + " file), chỉ hiển thị thông tin tổng quát bên trên.");
   }
 }
 
-function recursiveCountByDate(folder, targetDate, stats) {
+function recursiveCountByDate(folder, fromDate, toDate, stats) {
   var files = folder.getFiles();
   var tz = Session.getScriptTimeZone();
 
@@ -159,42 +170,42 @@ function recursiveCountByDate(folder, targetDate, stats) {
     var created = file.getDateCreated();
     var modified = file.getLastUpdated();
 
-    if (created >= targetDate || modified >= targetDate) {
+    // KIỂM TRA ĐIỀU KIỆN: Nằm trong khoảng [fromDate, toDate]
+    var isCreatedInRange = (created >= fromDate && created <= toDate);
+    var isModifiedInRange = (modified >= fromDate && modified <= toDate);
+
+    if (isCreatedInRange || isModifiedInRange) {
       stats.count++;
       
-      // Lấy dung lượng file và cộng dồn
       var sizeInBytes = file.getSize();
       stats.totalSize += sizeInBytes;
-      var strSize = formatBytes(sizeInBytes);
 
-      // Lấy đường link của thư mục chứa file (Parent Folder)
-      var parents = file.getParents();
-      var parentFolderUrl = "Không xác định";
-      if (parents.hasNext()) {
-        parentFolderUrl = parents.next().getUrl();
+      // Chỉ lưu danh sách chi tiết nếu số lượng file không quá lớn (để bảo vệ bộ nhớ RAM)
+      if (stats.count <= 200) {
+        var strSize = formatBytes(sizeInBytes);
+        var parents = file.getParents();
+        var parentFolderUrl = parents.hasNext() ? parents.next().getUrl() : "Không xác định";
+        var strCreated = Utilities.formatDate(created, tz, "dd/MM/yyyy");
+        var strModified = Utilities.formatDate(modified, tz, "dd/MM/yyyy");
+        
+        stats.list.push(
+          file.getName() + 
+          " | " + strSize + 
+          " | (Tạo: " + strCreated + ", Sửa: " + strModified + ")" + 
+          "\n      Link Folder: " + parentFolderUrl
+        );
       }
-
-      var strCreated = Utilities.formatDate(created, tz, "dd/MM/yyyy");
-      var strModified = Utilities.formatDate(modified, tz, "dd/MM/yyyy");
-      
-      // Đưa thông tin vào danh sách hiển thị
-      stats.list.push(
-        file.getName() + 
-        " | Dung lượng: " + strSize + 
-        " | (Tạo: " + strCreated + ", Sửa: " + strModified + ")" + 
-        "\n      Link Folder: " + parentFolderUrl
-      );
     }
   }
 
   var subFolders = folder.getFolders();
   while (subFolders.hasNext()) {
-    recursiveCountByDate(subFolders.next(), targetDate, stats);
+    recursiveCountByDate(subFolders.next(), fromDate, toDate, stats);
   }
 }
 
 /**
- * HÀM HỖ TRỢ: Chuyển đổi dung lượng từ Byte sang KB, MB, GB...
+ * HÀM HỖ TRỢ: Chuyển đổi dung lượng
  */
 function formatBytes(bytes) {
   if (bytes === 0) return '0 Bytes';
